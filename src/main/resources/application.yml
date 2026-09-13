@@ -1,0 +1,57 @@
+server:
+  port: 8080
+  shutdown: immediate
+
+spring:
+  application:
+    name: distribukv
+  mvc:
+    # PUT bodies are raw values; don't let Spring parse them as form data.
+    formcontent:
+      filter:
+        enabled: false
+  task:
+    scheduling:
+      pool:
+        size: 4
+
+kv:
+  node-id: node1
+  # Full, static cluster membership: id=baseUrl pairs (this node included).
+  cluster: node1=http://localhost:8080
+  replication-factor: 3
+  virtual-nodes: 256
+  default-consistency: STRONG
+  data-dir: ./data
+  fsync: false
+  heartbeat-interval-ms: 500
+  failure-timeout-ms: 2000
+  request-timeout-ms: 1000
+  hint-delivery-interval-ms: 1000
+  chaos-enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    distribution:
+      percentiles-histogram:
+        kv.requests: true
+      percentiles:
+        kv.requests: 0.5,0.95,0.99
+
+---
+spring:
+  config:
+    activate:
+      on-profile: json
+logging:
+  structured:
+    format:
+      console: ecs
