@@ -41,12 +41,13 @@ start_node() {
 
 stop_node() {
   local i=$1 pidfile=".run/node$1.pid"
-  [[ -f "$pidfile" ]] || { echo "node$i not running"; return; }
-  local pid; pid="$(cat "$pidfile")"
-  if [[ -r "/proc/$pid/winpid" ]]; then
-    taskkill //F //PID "$(cat "/proc/$pid/winpid")" > /dev/null 2>&1 || true   # Git Bash on Windows
-  else
-    kill -9 "$pid" 2>/dev/null || true
+  if command -v taskkill > /dev/null 2>&1; then
+    # Git Bash on Windows: $! is a wrapper, so kill whatever JVM owns the node's port.
+    local winpid
+    winpid=$(netstat -ano | grep -E "[:.]$(port "$i") .*LISTENING" | awk '{print $NF}' | head -1)
+    [[ -n "$winpid" ]] && taskkill //F //T //PID "$winpid" > /dev/null 2>&1 || true
+  elif [[ -f "$pidfile" ]]; then
+    kill -9 "$(cat "$pidfile")" 2>/dev/null || true
   fi
   rm -f "$pidfile"
   echo "killed node$i"
