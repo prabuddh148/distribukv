@@ -8,11 +8,13 @@ import io.distribukv.storage.VersionedValue;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.net.ConnectException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
@@ -81,7 +83,28 @@ public class NodeClient {
         if (faults.isIsolated()) {
             return CompletableFuture.failedFuture(new IOException("node is isolated (fault injection)"));
         }
-        return http.sendAsync(request, HttpResponse.BodyHandlers.ofString());
+        return http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .handle((response, error) -> error == null
+                        ? CompletableFuture.completedFuture(response)
+                        : retryOnce(request, error))
+                .thenCompose(future -> future);
+    }
+
+    /**
+     * Retries a peer request once after a connection error. After a peer restarts, pooled keep-alive
+     * connections to it are dead and the JDK client does not retry PUTs by itself. Peer operations are
+     * idempotent (last-write-wins), so a single retry is safe. Timeouts are not retried (that would
+     * double the wait) and neither is a refused connection (the peer is down; fail fast).
+     */
+    private CompletableFuture<HttpResponse<String>> retryOnce(HttpRequest request, Throwable error) {
+        Throwable cause = error instanceof CompletionException && error.getCause() != null ? error.getCause() : error;
+        boolean retryable = cause instanceof IOException
+                && !(cause instanceof HttpTimeoutException)
+                && !(cause instanceof ConnectException)
+                && !faults.isIsolated();
+        return retryable
+                ? http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                : CompletableFuture.failedFuture(cause);
     }
 
     private HttpRequest.Builder request(String url) {
