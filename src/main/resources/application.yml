@@ -14,6 +14,13 @@ spring:
     scheduling:
       pool:
         size: 4
+  # Kafka, Redis and MySQL are optional; their beans are created only when enabled under kv.*.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
 
 kv:
   node-id: node1
@@ -29,6 +36,25 @@ kv:
   request-timeout-ms: 1000
   hint-delivery-interval-ms: 1000
   chaos-enabled: true
+  chaos-auto-heal-seconds: 0
+  storage:
+    type: log               # log | mysql
+    mysql-url: jdbc:mysql://localhost:3306/?allowPublicKeyRetrieval=true&useSSL=false
+    mysql-username: root
+    mysql-password: ""
+  kafka:
+    enabled: false
+    bootstrap-servers: localhost:9092
+    topic: kv-replication
+    partitions: 6
+    topic-replicas: 1
+  redis:
+    enabled: false
+    url: redis://localhost:6379
+  public-demo:
+    enabled: false
+    requests-per-second: 10
+    max-value-bytes: 4096
 
 management:
   endpoints:
@@ -39,6 +65,10 @@ management:
     health:
       probes:
         enabled: true
+  health:
+    # Redis is optional for correctness (HTTP heartbeat fallback), so it must not fail health checks.
+    redis:
+      enabled: false
   metrics:
     distribution:
       percentiles-histogram:

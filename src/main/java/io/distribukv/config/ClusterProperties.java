@@ -25,7 +25,42 @@ public record ClusterProperties(
         @DefaultValue("2000") long failureTimeoutMs,
         @DefaultValue("1000") long requestTimeoutMs,
         @DefaultValue("1000") long hintDeliveryIntervalMs,
-        @DefaultValue("true") boolean chaosEnabled) {
+        @DefaultValue("true") boolean chaosEnabled,
+        @DefaultValue("0") long chaosAutoHealSeconds,
+        @DefaultValue Storage storage,
+        @DefaultValue Kafka kafka,
+        @DefaultValue Redis redis,
+        @DefaultValue PublicDemo publicDemo) {
+
+    /** Local storage engine: an append-only commit log on disk, or a MySQL database per node. */
+    public record Storage(
+            @DefaultValue("log") String type,
+            @DefaultValue("jdbc:mysql://localhost:3306/?allowPublicKeyRetrieval=true&useSSL=false") String mysqlUrl,
+            @DefaultValue("root") String mysqlUsername,
+            String mysqlPassword) {
+    }
+
+    /** Kafka replication log. */
+    public record Kafka(
+            @DefaultValue("false") boolean enabled,
+            @DefaultValue("localhost:9092") String bootstrapServers,
+            @DefaultValue("kv-replication") String topic,
+            @DefaultValue("6") int partitions,
+            @DefaultValue("1") int topicReplicas) {
+    }
+
+    /** Redis-backed heartbeats for failure detection. */
+    public record Redis(
+            @DefaultValue("false") boolean enabled,
+            @DefaultValue("redis://localhost:6379") String url) {
+    }
+
+    /** Guard rails for traffic arriving through a public tunnel. */
+    public record PublicDemo(
+            @DefaultValue("false") boolean enabled,
+            @DefaultValue("10") int requestsPerSecond,
+            @DefaultValue("4096") int maxValueBytes) {
+    }
 
     public ClusterProperties {
         if (nodeId == null || nodeId.isBlank()) {

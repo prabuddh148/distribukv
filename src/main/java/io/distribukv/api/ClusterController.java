@@ -6,6 +6,7 @@ import io.distribukv.cluster.Membership;
 import io.distribukv.cluster.NodeClient;
 import io.distribukv.config.ClusterProperties;
 import io.distribukv.coordinator.Coordinator;
+import io.distribukv.replication.ReplicationLogConsumer;
 import io.distribukv.ring.ConsistentHashRing;
 import io.distribukv.storage.StorageEngine;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -32,10 +34,12 @@ public class ClusterController {
     private final HintedHandoff hints;
     private final FaultInjector faults;
     private final Coordinator coordinator;
+    private final Optional<ReplicationLogConsumer> logConsumer;
 
     public ClusterController(ClusterProperties props, ConsistentHashRing ring, Membership membership,
                              NodeClient client, StorageEngine storage, HintedHandoff hints,
-                             FaultInjector faults, Coordinator coordinator) {
+                             FaultInjector faults, Coordinator coordinator,
+                             Optional<ReplicationLogConsumer> logConsumer) {
         this.props = props;
         this.ring = ring;
         this.membership = membership;
@@ -44,13 +48,25 @@ public class ClusterController {
         this.hints = hints;
         this.faults = faults;
         this.coordinator = coordinator;
+        this.logConsumer = logConsumer;
     }
 
     /** This node's own counters. Reachable even while the node is isolated. */
     @GetMapping("/cluster/local")
     public Map<String, Object> local() {
-        return Map.of("nodeId", props.nodeId(), "keys", storage.liveKeyCount(),
-                "hintsPending", hints.pending(), "isolated", faults.isIsolated());
+        Map<String, Object> local = new LinkedHashMap<>();
+        local.put("nodeId", props.nodeId());
+        long keys;
+        try {
+            keys = storage.liveKeyCount();
+        } catch (RuntimeException e) {
+            keys = -1; // storage unavailable (e.g. MySQL down)
+        }
+        local.put("keys", keys);
+        local.put("hintsPending", hints.pending());
+        local.put("isolated", faults.isIsolated());
+        local.put("replicationLagMs", logConsumer.map(ReplicationLogConsumer::lastLagMs).orElse(null));
+        return local;
     }
 
     /** Cluster view from this node: failure-detector state plus each node's counters. */
@@ -82,6 +98,10 @@ public class ClusterController {
         result.put("self", props.nodeId());
         result.put("replicationFactor", props.replicationFactor());
         result.put("defaultConsistency", props.defaultConsistency());
+        result.put("stack", Map.of(
+                "storage", storage.type(),
+                "replicationLog", props.kafka().enabled() ? "kafka:" + props.kafka().topic() : "none",
+                "membership", membership.source()));
         result.put("nodes", nodes);
         return result;
     }

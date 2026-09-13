@@ -1,45 +1,91 @@
-# 5-node DistribuKV cluster. Dashboard: http://localhost:8081
+# Full stack: 5 DistribuKV nodes + Kafka (replication log) + MySQL (per-node storage) + Redis (heartbeats).
 #   docker compose up -d --build
+#   open http://localhost:8081
 #   scripts/chaos-test.sh compose
 x-node: &node
   build: .
   image: distribukv:local
   restart: "no"
+  depends_on:
+    kafka: { condition: service_healthy }
+    mysql: { condition: service_healthy }
+    redis: { condition: service_healthy }
   environment: &env
     KV_CLUSTER: node1=http://node1:8080,node2=http://node2:8080,node3=http://node3:8080,node4=http://node4:8080,node5=http://node5:8080
     KV_REPLICATION_FACTOR: "3"
+    KV_STORAGE_TYPE: mysql
+    KV_STORAGE_MYSQL_URL: jdbc:mysql://mysql:3306/?allowPublicKeyRetrieval=true&useSSL=false
+    KV_STORAGE_MYSQL_USERNAME: root
+    KV_STORAGE_MYSQL_PASSWORD: distribukv
+    KV_KAFKA_ENABLED: "true"
+    KV_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    KV_REDIS_ENABLED: "true"
+    KV_REDIS_URL: redis://redis:6379
     JAVA_TOOL_OPTIONS: -Xmx200m
 
 services:
+  kafka:
+    image: apache/kafka:3.9.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_HEAP_OPTS: -Xmx512m -Xms512m
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 5s
+      timeout: 15s
+      retries: 30
+
+  mysql:
+    image: mysql:8.4
+    command: ["--innodb-buffer-pool-size=128M"]
+    environment:
+      MYSQL_ROOT_PASSWORD: distribukv
+    ports: ["3307:3306"]
+    volumes: ["mysql-data:/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -pdistribukv --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   node1:
     <<: *node
     environment: { <<: *env, KV_NODE_ID: node1 }
     ports: ["8081:8080"]
-    volumes: ["node1-data:/data"]
   node2:
     <<: *node
     environment: { <<: *env, KV_NODE_ID: node2 }
     ports: ["8082:8080"]
-    volumes: ["node2-data:/data"]
   node3:
     <<: *node
     environment: { <<: *env, KV_NODE_ID: node3 }
     ports: ["8083:8080"]
-    volumes: ["node3-data:/data"]
   node4:
     <<: *node
     environment: { <<: *env, KV_NODE_ID: node4 }
     ports: ["8084:8080"]
-    volumes: ["node4-data:/data"]
   node5:
     <<: *node
     environment: { <<: *env, KV_NODE_ID: node5 }
     ports: ["8085:8080"]
-    volumes: ["node5-data:/data"]
 
 volumes:
-  node1-data:
-  node2-data:
-  node3-data:
-  node4-data:
-  node5-data:
+  mysql-data:

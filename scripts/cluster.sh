@@ -29,11 +29,23 @@ start_node() {
   if [[ -f ".run/node$i.pid" ]] && kill -0 "$(cat ".run/node$i.pid")" 2>/dev/null; then
     echo "node$i already running"; return
   fi
-  nohup java -Xmx256m -jar "$JAR" \
+  local extra=()
+  if [[ "${STACK:-}" == full ]]; then # Kafka on :9092, MySQL on :$MYSQL_PORT, Redis on :6379 (see scripts/local-infra.sh)
+    extra+=(--kv.storage.type=mysql
+            "--kv.storage.mysql-url=jdbc:mysql://127.0.0.1:${MYSQL_PORT:-3306}/?allowPublicKeyRetrieval=true&useSSL=false"
+            --kv.storage.mysql-username=root "--kv.storage.mysql-password=${MYSQL_PASSWORD:-}"
+            --kv.kafka.enabled=true --kv.kafka.bootstrap-servers=127.0.0.1:9092
+            --kv.redis.enabled=true --kv.redis.url=redis://127.0.0.1:6379)
+  fi
+  if [[ "${PUBLIC_DEMO:-}" == true ]]; then
+    extra+=(--kv.public-demo.enabled=true --kv.chaos-auto-heal-seconds=60)
+  fi
+  nohup java -Xmx200m -jar "$JAR" \
     --server.port="$(port "$i")" \
     --kv.node-id="node$i" \
     --kv.cluster="$(cluster_spec)" \
     --kv.data-dir=data \
+    "${extra[@]}" \
     > "logs/node$i.log" 2>&1 &
   echo $! > ".run/node$i.pid"
   echo "started node$i on http://localhost:$(port "$i")"

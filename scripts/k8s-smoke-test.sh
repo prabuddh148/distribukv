@@ -24,6 +24,10 @@ for _ in $(seq 1 90); do
   sleep 2
 done
 curl -s $API/cluster/status; echo
+curl -s $API/cluster/status | grep -q '"storage":"mysql"' || { echo "expected MySQL storage"; exit 1; }
+curl -s $API/cluster/status | grep -q '"replicationLog":"kafka:kv-replication"' || { echo "expected Kafka replication log"; exit 1; }
+curl -s $API/cluster/status | grep -q '"membership":"redis"' || { echo "expected Redis heartbeats"; exit 1; }
+echo "stack verified: MySQL storage, Kafka replication log, Redis heartbeats"
 
 curl -sf -X PUT -H 'Content-Type: text/plain' --data-raw v1 "$API/kv/$KEY?consistency=STRONG"; echo
 RING=$(curl -s "$API/cluster/ring?key=$KEY")

@@ -67,7 +67,8 @@ let replicas = [];
 async function refresh() {
   try {
     const s = await (await fetch('/cluster/status')).json();
-    $('sub').textContent = `Served by ${s.self} · ${s.nodes.length} nodes · N=${s.replicationFactor} · default ${s.defaultConsistency}`;
+    $('sub').textContent = `Served by ${s.self} · ${s.nodes.length} nodes · N=${s.replicationFactor} · default ${s.defaultConsistency}`
+      + ` · storage: ${s.stack.storage} · replication log: ${s.stack.replicationLog} · failure detection: ${s.stack.membership}`;
     $('nodes').innerHTML = s.nodes.map(n => {
       const isolated = n.stats && n.stats.isolated;
       const state = isolated ? 'ISOLATED' : (n.stats ? n.status : 'DOWN');
@@ -77,6 +78,7 @@ async function refresh() {
         <dl>
           <dt>keys</dt><dd>${n.stats ? n.stats.keys : '–'}</dd>
           <dt>hints queued</dt><dd>${n.stats ? n.stats.hintsPending : '–'}</dd>
+          <dt>log lag</dt><dd>${n.stats && n.stats.replicationLagMs != null && n.stats.replicationLagMs >= 0 ? n.stats.replicationLagMs + ' ms' : '–'}</dd>
           <dt>ring share</dt><dd>${(n.primaryOwnership * 100).toFixed(1)}%</dd>
           <dt>last heartbeat</dt><dd>${n.id === s.self ? 'self' : n.lastSeenMsAgo + ' ms'}</dd>
         </dl>

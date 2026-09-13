@@ -1,7 +1,9 @@
 package io.distribukv.config;
 
 import io.distribukv.ring.ConsistentHashRing;
+import io.distribukv.storage.CommitLogStorage;
 import io.distribukv.storage.HybridClock;
+import io.distribukv.storage.MySqlStorage;
 import io.distribukv.storage.StorageEngine;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,7 +23,13 @@ public class KvConfig {
 
     @Bean(destroyMethod = "close")
     public StorageEngine storageEngine(ClusterProperties props) throws IOException {
-        return new StorageEngine(Path.of(props.dataDir(), props.nodeId()), props.fsync());
+        ClusterProperties.Storage storage = props.storage();
+        return switch (storage.type()) {
+            case "log" -> new CommitLogStorage(Path.of(props.dataDir(), props.nodeId()), props.fsync());
+            case "mysql" -> new MySqlStorage(storage.mysqlUrl(), storage.mysqlUsername(),
+                    storage.mysqlPassword() == null ? "" : storage.mysqlPassword(), props.nodeId());
+            default -> throw new IllegalArgumentException("kv.storage.type must be 'log' or 'mysql', got " + storage.type());
+        };
     }
 
     @Bean

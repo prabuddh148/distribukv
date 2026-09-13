@@ -45,6 +45,16 @@ expect() { # expect STATUS "STATUS BODY" description
   log "ok  - $3 (HTTP $1)"
 }
 
+expect_eventually() { # expect_eventually STATUS METHOD NODE PATH description  (eventual reads may lag briefly)
+  local out
+  for _ in $(seq 1 20); do
+    out=$(request "$2" "$3" "$4")
+    [[ "${out%% *}" == "$1" ]] && break
+    sleep 0.5
+  done
+  expect "$1" "$out" "$5"
+}
+
 value_on() { # value stored locally on a node (bypasses coordination)
   curl -s "$(url "$1")/internal/kv/$KEY" | sed -n 's/.*"value":"\([^"]*\)".*/\1/p'
 }
@@ -59,7 +69,7 @@ wait_for_value() {
 
 for i in $(seq 1 $NODES); do wait_healthy "$i"; done
 sleep 3 # let failure detectors see every peer
-log "cluster healthy"
+log "cluster healthy - stack: $(curl -s "$(url 1)/cluster/status" | grep -o '"stack":{[^}]*}')"
 
 replicas=$(curl -s "$(url 1)/cluster/ring?key=$KEY" | grep -o 'node[0-9]*' | sed 's/node//' | tr '\n' ' ')
 read -r R1 R2 R3 <<< "$replicas"
@@ -79,7 +89,7 @@ log "--- scenario 2: quorum lost (two replicas down)"
 stop_node "$R2"
 expect 503 "$(request PUT "$C" "/kv/$KEY?consistency=STRONG" v3)" "strong PUT rejected without quorum"
 expect 200 "$(request PUT "$C" "/kv/$KEY?consistency=EVENTUAL" v3)" "eventual PUT accepted with 1/3 replicas"
-expect 200 "$(request GET "$C" "/kv/$KEY?consistency=EVENTUAL")" "eventual GET with 1/3 replicas"
+expect_eventually 200 GET "$C" "/kv/$KEY?consistency=EVENTUAL" "eventual GET with 1/3 replicas"
 
 log "--- scenario 3: recovery via hinted handoff"
 start_node "$R1"; start_node "$R2"
@@ -93,5 +103,15 @@ expect 503 "$(request GET "$R3" "/kv/$KEY")" "isolated node refuses traffic"
 expect 200 "$(request PUT "$C" "/kv/$KEY?consistency=STRONG" v4)" "strong PUT during partition"
 expect 200 "$(request POST "$C" "/cluster/nodes/node$R3/isolate?enabled=false")" "heal node$R3"
 wait_for_value "$R3" v4
+
+if [[ "$MODE" == compose ]]; then
+  log "--- evidence from the infrastructure"
+  row=$(docker compose exec -T mysql mysql -uroot -pdistribukv -N -e "SELECT v FROM kv_node$R3.kv_entries WHERE k='$KEY'" 2>/dev/null | tr -d '\r')
+  [[ "$row" == v4 ]] || fail "expected v4 in node$R3's MySQL database, found '$row'"
+  log "ok  - node$R3's own MySQL database (kv_node$R3) holds '$row'"
+  log "Kafka consumer group of node$R1 (replication log offsets and lag):"
+  docker compose exec -T kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
+    --describe --group "kv-node$R1" 2>/dev/null | sed -n '1,9p'
+fi
 
 log "ALL FAILURE SCENARIOS PASSED"

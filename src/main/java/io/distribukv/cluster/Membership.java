@@ -10,13 +10,18 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Static membership plus heartbeat-based failure detection. Every node pings every peer each
- * {@code kv.heartbeat-interval-ms}; a peer that has not answered for {@code kv.failure-timeout-ms}
- * is marked DOWN. Coordinators skip DOWN replicas (the write becomes a hint) instead of waiting
- * for a timeout on every request.
+ * Static membership plus heartbeat-based failure detection.
+ *
+ * <p>With Redis enabled, nodes publish TTL heartbeat keys and read everyone's liveness in one
+ * round trip; a missing key means DOWN. Without Redis (or while Redis is unreachable, so Redis is
+ * never a single point of failure) every node pings every peer over HTTP and marks a peer DOWN
+ * after {@code kv.failure-timeout-ms} of silence. Coordinators skip DOWN replicas (the write
+ * becomes a hint) instead of waiting for a timeout on every request.
  */
 @Component
 public class Membership {
@@ -30,16 +35,24 @@ public class Membership {
 
     private final String selfId;
     private final Map<String, String> members;
+    private final List<String> peers;
     private final long failureTimeoutMs;
     private final NodeClient client;
+    private final Optional<RedisLiveness> redis;
+    private final FaultInjector faults;
     private final Map<String, Long> lastSeen = new ConcurrentHashMap<>();
     private final Map<String, Status> status = new ConcurrentHashMap<>();
+    private volatile String source = "http";
 
-    public Membership(ClusterProperties props, NodeClient client, MeterRegistry metrics) {
+    public Membership(ClusterProperties props, NodeClient client, Optional<RedisLiveness> redis,
+                      FaultInjector faults, MeterRegistry metrics) {
         this.selfId = props.nodeId();
         this.members = props.members();
+        this.peers = members.keySet().stream().filter(id -> !id.equals(selfId)).toList();
         this.failureTimeoutMs = props.failureTimeoutMs();
         this.client = client;
+        this.redis = redis;
+        this.faults = faults;
         long now = System.currentTimeMillis();
         members.keySet().forEach(id -> {
             lastSeen.put(id, now);
@@ -51,19 +64,48 @@ public class Membership {
 
     @Scheduled(fixedDelayString = "${kv.heartbeat-interval-ms:500}")
     public void heartbeat() {
-        long now = System.currentTimeMillis();
-        members.forEach((id, url) -> {
-            if (id.equals(selfId)) {
-                return;
+        if (redis.isPresent() && !faults.isIsolated() && redisHeartbeat(redis.get())) {
+            return;
+        }
+        httpHeartbeat();
+    }
+
+    private boolean redisHeartbeat(RedisLiveness liveness) {
+        try {
+            liveness.heartbeat(selfId, members.get(selfId));
+            Set<String> alive = liveness.aliveAmong(peers);
+            peers.forEach(id -> {
+                if (alive.contains(id)) {
+                    markAlive(id);
+                } else {
+                    markDown(id, "heartbeat key expired in Redis");
+                }
+            });
+            if (!"redis".equals(source)) {
+                log.info("Failure detector: using Redis heartbeats");
+                source = "redis";
             }
-            client.ping(url).thenAccept(alive -> {
+            return true;
+        } catch (RuntimeException e) {
+            if ("redis".equals(source)) {
+                log.warn("Failure detector: Redis unavailable ({}), falling back to HTTP heartbeats", e.getMessage());
+            }
+            source = "http";
+            peers.forEach(id -> lastSeen.merge(id, System.currentTimeMillis(), Math::max)); // grace period for HTTP
+            return false;
+        }
+    }
+
+    private void httpHeartbeat() {
+        long now = System.currentTimeMillis();
+        peers.forEach(id -> {
+            client.ping(members.get(id)).thenAccept(alive -> {
                 if (alive) {
                     markAlive(id);
                 }
             });
-            if (status.get(id) == Status.UP && now - lastSeen.get(id) > failureTimeoutMs) {
-                status.put(id, Status.DOWN);
-                log.warn("Failure detector: {} is DOWN (no heartbeat for {} ms)", id, now - lastSeen.get(id));
+            if (now - lastSeen.get(id) > failureTimeoutMs) {
+                markDown(id, "no heartbeat for " + (now - lastSeen.get(id)) + " ms");
             }
         });
     }
@@ -72,6 +114,12 @@ public class Membership {
         lastSeen.put(id, System.currentTimeMillis());
         if (status.put(id, Status.UP) == Status.DOWN) {
             log.info("Failure detector: {} is back UP", id);
+        }
+    }
+
+    private void markDown(String id, String reason) {
+        if (status.put(id, Status.DOWN) == Status.UP) {
+            log.warn("Failure detector: {} is DOWN ({})", id, reason);
         }
     }
 
@@ -89,6 +137,11 @@ public class Membership {
 
     public String selfId() {
         return selfId;
+    }
+
+    /** "redis" or "http": where liveness information currently comes from. */
+    public String source() {
+        return source;
     }
 
     public List<MemberState> snapshot() {

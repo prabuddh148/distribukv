@@ -72,8 +72,21 @@ spec:
                 distribukv-0=http://distribukv-0.distribukv:8080,distribukv-1=http://distribukv-1.distribukv:8080,distribukv-2=http://distribukv-2.distribukv:8080,distribukv-3=http://distribukv-3.distribukv:8080,distribukv-4=http://distribukv-4.distribukv:8080
             - name: KV_REPLICATION_FACTOR
               value: "3"
-            - name: KV_FSYNC
+            - name: KV_STORAGE_TYPE
+              value: mysql
+            - name: KV_STORAGE_MYSQL_URL
+              value: jdbc:mysql://mysql:3306/?allowPublicKeyRetrieval=true&useSSL=false
+            - name: KV_STORAGE_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: mysql-root, key: password }
+            - name: KV_KAFKA_ENABLED
               value: "true"
+            - name: KV_KAFKA_BOOTSTRAP_SERVERS
+              value: kafka:9092
+            - name: KV_REDIS_ENABLED
+              value: "true"
+            - name: KV_REDIS_URL
+              value: redis://redis:6379
             - name: SPRING_PROFILES_ACTIVE
               value: json
           resources:

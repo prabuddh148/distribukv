@@ -3,6 +3,7 @@ name: CI/CD
 on:
   push:
     branches: [main]
+    paths-ignore: ["**.md"]
   pull_request:
   workflow_dispatch:
 
@@ -56,6 +57,12 @@ jobs:
         with:
           cluster_name: kv
       - run: kind load docker-image ghcr.io/prabuddh148/distribukv:latest --name kv
+      - name: Deploy Kafka, MySQL and Redis
+        run: |
+          kubectl apply -f k8s/infra.yaml
+          kubectl -n distribukv rollout status deployment/kafka --timeout=300s
+          kubectl -n distribukv rollout status deployment/redis --timeout=300s
+          kubectl -n distribukv rollout status statefulset/mysql --timeout=300s
       - run: kubectl apply -f k8s/distribukv.yaml
       - run: kubectl -n distribukv rollout status statefulset/distribukv --timeout=300s
       - run: bash scripts/k8s-smoke-test.sh
