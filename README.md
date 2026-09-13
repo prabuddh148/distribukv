@@ -2,6 +2,8 @@
 
 [![CI/CD](https://github.com/prabuddh148/distribukv/actions/workflows/ci.yml/badge.svg)](https://github.com/prabuddh148/distribukv/actions/workflows/ci.yml)
 
+**Project page:** https://prabuddh148.github.io/distribukv/ (architecture, verified failure tests, benchmarks, and the live cluster whenever the demo is running)
+
 A small, working distributed key-value store in the style of Amazon Dynamo / Cassandra, written in Java 21 + Spring Boot, with **Kafka**, **MySQL** and **Redis** as optional infrastructure adapters.
 
 It partitions keys across nodes with **consistent hashing**, replicates every key to **N = 3** nodes, and lets the client choose **STRONG** (majority quorum) or **EVENTUAL** consistency per request. It keeps serving when nodes crash or get partitioned off, thanks to **failure detection**, **hinted handoff**, **read repair** and a **Kafka replication log**.
