@@ -39,7 +39,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose up -d --build
+      # Build the image once: letting compose build it for all 5 nodes in parallel triggers
+      # Maven Central rate limiting (HTTP 403) during dependency download.
+      - run: docker build -t distribukv:local .
+      - run: docker compose up -d
       - run: bash scripts/chaos-test.sh compose
       - if: failure()
         run: docker compose logs --tail 200
