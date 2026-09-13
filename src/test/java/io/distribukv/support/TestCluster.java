@@ -16,9 +16,11 @@ import java.net.http.HttpResponse;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -35,6 +37,7 @@ public final class TestCluster implements AutoCloseable {
 
     private static final HttpClient HTTP = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final Random RANDOM = new Random();
 
     private final Map<String, Integer> ports = new LinkedHashMap<>();
     private final Map<String, ConfigurableApplicationContext> running = new LinkedHashMap<>();
@@ -46,15 +49,31 @@ public final class TestCluster implements AutoCloseable {
         this.dataDir = dataDir;
         this.extraArgs = extraArgs;
         for (int i = 1; i <= nodes; i++) {
-            try (ServerSocket socket = new ServerSocket(0)) {
-                ports.put("node" + i, socket.getLocalPort());
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
+            ports.put("node" + i, freePort(ports.values()));
         }
         this.clusterSpec = ports.entrySet().stream()
                 .map(e -> e.getKey() + "=http://localhost:" + e.getValue())
                 .collect(Collectors.joining(","));
+    }
+
+    /**
+     * Ports are chosen before the nodes start (every node needs the full membership list), so they
+     * must not be grabbed in the meantime. OS-assigned ports come from the ephemeral range, which
+     * outbound connections (Kafka, JDBC, HTTP clients) also use; pick below it instead.
+     */
+    private static int freePort(Collection<Integer> taken) {
+        for (int attempt = 0; attempt < 500; attempt++) {
+            int candidate = 20_000 + RANDOM.nextInt(10_000);
+            if (taken.contains(candidate)) {
+                continue;
+            }
+            try (ServerSocket socket = new ServerSocket(candidate)) {
+                return candidate;
+            } catch (IOException busyOrReserved) {
+                // try another one
+            }
+        }
+        throw new UncheckedIOException(new IOException("No free port found between 20000 and 30000"));
     }
 
     public List<String> nodeIds() {
