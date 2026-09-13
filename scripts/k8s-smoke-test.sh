@@ -31,6 +31,7 @@ VICTIM=""
 for pod in $(grep -o 'distribukv-[0-9]' <<< "$RING"); do
   if [[ "$pod" != distribukv-0 ]]; then VICTIM=$pod; break; fi
 done
+OLD_UID=$(kubectl -n "$NS" get pod "$VICTIM" -o jsonpath='{.metadata.uid}')
 echo "deleting replica pod $VICTIM"
 kubectl -n "$NS" delete pod "$VICTIM" --wait=false
 
@@ -38,7 +39,14 @@ curl -sf -X PUT -H 'Content-Type: text/plain' --data-raw v2 "$API/kv/$KEY?consis
 [[ "$(curl -sf "$API/kv/$KEY?consistency=STRONG")" == *'"value":"v2"'* ]] || { echo "strong read failed"; exit 1; }
 echo "strong reads and writes kept working while $VICTIM was down"
 
-kubectl -n "$NS" wait --for=condition=Ready "pod/$VICTIM" --timeout=180s
+# Wait for the *replacement* pod: the old one keeps its Ready condition while terminating.
+for _ in $(seq 1 180); do
+  UID_NOW=$(kubectl -n "$NS" get pod "$VICTIM" -o jsonpath='{.metadata.uid}' 2>/dev/null || true)
+  READY=$(kubectl -n "$NS" get pod "$VICTIM" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)
+  [[ -n "$UID_NOW" && "$UID_NOW" != "$OLD_UID" && "$READY" == True ]] && break
+  sleep 1
+done
+echo "replacement pod $VICTIM is ready"
 forward "$VICTIM" 18081
 for _ in $(seq 1 60); do
   if [[ "$(curl -s "http://localhost:18081/internal/kv/$KEY")" == *'"value":"v2"'* ]]; then
