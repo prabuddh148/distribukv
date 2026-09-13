@@ -56,14 +56,16 @@ public record ClusterProperties(
     }
 
     /**
-     * Guard rails for traffic arriving through a public tunnel. {@code allowedOrigins} lets a static
-     * project page (e.g. GitHub Pages) read the live cluster status from the browser.
+     * Guard rails for public traffic, recognised by {@code clientIpHeader}, which the tunnel or proxy
+     * in front of the cluster adds (Cloudflare: CF-Connecting-IP, Hugging Face: X-Forwarded-For).
+     * {@code allowedOrigins} lets a static project page read the live cluster status from the browser.
      */
     public record PublicDemo(
             @DefaultValue("false") boolean enabled,
             @DefaultValue("10") int requestsPerSecond,
             @DefaultValue("4096") int maxValueBytes,
-            List<String> allowedOrigins) {
+            List<String> allowedOrigins,
+            @DefaultValue("CF-Connecting-IP") String clientIpHeader) {
     }
 
     public ClusterProperties {

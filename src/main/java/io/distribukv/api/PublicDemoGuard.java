@@ -16,9 +16,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Guard rails for requests that arrive through a public Cloudflare tunnel (identified by the
- * {@code CF-Connecting-IP} header). Peer-to-peer and local traffic never carries that header and
- * is not affected. Public visitors may use the dashboard, the client API and the partition
+ * Guard rails for requests that arrive through a public tunnel or proxy, identified by the
+ * client-IP header it adds ({@code kv.public-demo.client-ip-header}). Peer-to-peer and local
+ * traffic never carries that header and is not affected. Public visitors may use the dashboard, the client API and the partition
  * simulator, but not node-internal or admin endpoints, and they are rate limited per IP.
  */
 @Component
@@ -28,21 +28,24 @@ public class PublicDemoGuard extends OncePerRequestFilter {
 
     private final int requestsPerSecond;
     private final int maxValueBytes;
+    private final String clientIpHeader;
     private final Map<String, TokenBucket> buckets = new ConcurrentHashMap<>();
 
     public PublicDemoGuard(ClusterProperties props) {
         this.requestsPerSecond = props.publicDemo().requestsPerSecond();
         this.maxValueBytes = props.publicDemo().maxValueBytes();
+        this.clientIpHeader = props.publicDemo().clientIpHeader();
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        String clientIp = request.getHeader("CF-Connecting-IP");
-        if (clientIp == null) {
-            chain.doFilter(request, response);
+        String forwarded = request.getHeader(clientIpHeader);
+        if (forwarded == null || forwarded.isBlank()) {
+            chain.doFilter(request, response); // peer-to-peer or local traffic
             return;
         }
+        String clientIp = forwarded.split(",")[0].trim();
         String path = request.getRequestURI();
         boolean blocked = path.startsWith("/internal/") || path.startsWith("/admin/")
                 || (path.startsWith("/actuator") && !path.equals("/actuator/health") && !path.equals("/actuator/prometheus"));

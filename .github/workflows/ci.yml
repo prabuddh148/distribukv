@@ -71,6 +71,20 @@ jobs:
           kubectl -n distribukv get pods -o wide
           kubectl -n distribukv logs statefulset/distribukv --tail 100 || true
 
+  all-in-one-image:
+    name: All-in-one image (Hugging Face Space) & smoke test
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f deploy/huggingface/Dockerfile -t distribukv-space .
+      - run: docker run -d --name space -p 7860:7860 distribukv-space
+      - run: bash deploy/huggingface/smoke-test.sh http://localhost:7860
+      - if: failure()
+        run: |
+          docker logs space --tail 100 || true
+          docker exec space sh -c 'tail -n 40 /tmp/distribukv/logs/*.log' || true
+
   publish-image:
     name: Publish image to GHCR
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
