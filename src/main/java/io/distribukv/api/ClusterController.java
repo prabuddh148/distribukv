@@ -97,6 +97,7 @@ public class ClusterController {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("self", props.nodeId());
         result.put("replicationFactor", props.replicationFactor());
+        result.put("virtualNodes", props.virtualNodes());
         result.put("defaultConsistency", props.defaultConsistency());
         result.put("stack", Map.of(
                 "storage", storage.type(),

@@ -6,17 +6,18 @@
 <title>DistribuKV · Distributed Key-Value Store</title>
 <meta name="description" content="A Dynamo-style distributed key-value store: consistent hashing, tunable quorum consistency, Kafka replication log, MySQL storage, Redis failure detection. Java 21, Spring Boot, Docker, Kubernetes.">
 <meta property="og:title" content="DistribuKV · Distributed Key-Value Store">
-<meta property="og:description" content="Consistent hashing, quorum replication, Kafka replication log, MySQL storage, Redis failure detection, chaos-tested in CI.">
+<meta property="og:description" content="Consistent hashing, quorum replication, Kafka replication log, MySQL storage, Redis failure detection, chaos-tested in CI. Break the cluster in your browser.">
+<link rel="stylesheet" href="dashboard.css">
 <style>
   :root {
     --bg: #fbfbfa; --surface: #ffffff; --ink: #16181d; --muted: #5d6470; --line: #e3e5e8;
-    --accent: #0f766e; --accent-soft: #e6f3f1; --up: #15803d; --down: #b91c1c; --warn: #a16207;
+    --accent: #0f766e; --accent-soft: #e6f3f1; --up: #15803d; --down: #b91c1c;
     --code-bg: #f3f4f6; --shadow: 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.06);
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #0d1014; --surface: #151a20; --ink: #e8eaed; --muted: #9aa3ae; --line: #262d36;
-      --accent: #2dd4bf; --accent-soft: #10302d; --up: #4ade80; --down: #f87171; --warn: #facc15;
+      --accent: #2dd4bf; --accent-soft: #10302d; --up: #4ade80; --down: #f87171;
       --code-bg: #0f1318; --shadow: none;
     }
   }
@@ -25,14 +26,16 @@
   body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
+  code { font: 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
   .wrap { max-width: 1040px; margin: 0 auto; padding-inline: 20px; }
+  .wrap.wide { max-width: 1240px; }
   header.top { border-bottom: 1px solid var(--line); background: var(--surface); }
   header.top .wrap { display: flex; justify-content: space-between; align-items: center; height: 56px; }
   .brand { font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
   nav a { margin-left: 20px; color: var(--muted); font-size: 14px; }
   @media (max-width: 640px) { nav a.opt { display: none; } }
 
-  .hero { padding-block: 64px 32px; }
+  .hero { padding-block: 64px 24px; }
   .eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 12px; }
   h1 { font-size: clamp(34px, 6vw, 52px); line-height: 1.08; letter-spacing: -.025em; margin: 0 0 18px; }
   .lede { font-size: 19px; color: var(--muted); max-width: 720px; margin: 0 0 24px; }
@@ -43,28 +46,19 @@
   .btn:hover { text-decoration: none; border-color: var(--accent); }
   .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   @media (prefers-color-scheme: dark) { .btn.primary { color: #062320; } }
-  .btn[aria-disabled="true"] { opacity: .5; pointer-events: none; }
+  .btn[hidden] { display: none; }
 
   section { padding-block: 40px; }
   h2 { font-size: 26px; letter-spacing: -.015em; margin: 0 0 8px; }
-  .sub { color: var(--muted); margin: 0 0 24px; max-width: 720px; }
+  .sub { color: var(--muted); margin: 0 0 20px; max-width: 780px; }
   .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
 
-  .live { padding: 20px; }
-  .live-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 16px; }
+  .live { padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
   .pill { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
   .dot.on { background: var(--up); box-shadow: 0 0 0 4px color-mix(in srgb, var(--up) 20%, transparent); }
-  .dot.off { background: var(--down); }
-  .stack { font-size: 14px; color: var(--muted); }
-  .nodes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-  .node { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
-  .node b { display: flex; justify-content: space-between; margin-bottom: 4px; }
-  .state { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; color: #fff; }
-  .UP { background: var(--up); } .DOWN { background: var(--down); } .ISOLATED { background: var(--warn); }
-  @media (prefers-color-scheme: dark) { .state { color: #0d1014; } }
-  .node span { color: var(--muted); display: block; font-variant-numeric: tabular-nums; }
-  .offline { color: var(--muted); margin: 0; }
+  .muted { color: var(--muted); font-size: 14px; }
+  .sim-host { background: var(--bg); }
 
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
   .stat { padding: 18px; }
@@ -84,9 +78,9 @@
   .steps b { color: var(--ink); }
 
   .grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
-  .feature { padding: 18px 20px; }
-  .feature h3 { font-size: 16px; margin: 0 0 6px; }
-  .feature p { margin: 0; color: var(--muted); font-size: 15px; }
+  .feature, .qa { padding: 18px 20px; }
+  .feature h3, .qa h3 { font-size: 16px; margin: 0 0 6px; }
+  .feature p, .qa p { margin: 0; color: var(--muted); font-size: 15px; }
 
   .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 15px; }
@@ -94,14 +88,10 @@
   th { font-size: 13px; color: var(--muted); font-weight: 600; }
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   tr:last-child td { border-bottom: 0; }
-  .ok { color: var(--up); font-weight: 600; white-space: nowrap; }
-  details { margin-top: 14px; }
-  summary { cursor: pointer; color: var(--accent); font-weight: 600; }
-  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 14px; overflow-x: auto; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-
-  .qa { padding: 18px 20px; }
-  .qa h3 { font-size: 16px; margin: 0 0 6px; }
-  .qa p { margin: 0; color: var(--muted); font-size: 15px; }
+  td.pass { color: var(--up); font-weight: 600; white-space: nowrap; }
+  details.ci { margin-top: 14px; }
+  details.ci summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+  pre.ci-log { margin: 10px 0 0; background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow-x: auto; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 
   .pipeline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .stage { padding: 10px 14px; font-size: 14px; }
@@ -116,6 +106,7 @@
   <div class="wrap">
     <a class="brand" href="#">DistribuKV</a>
     <nav>
+      <a class="opt" href="#try">Try it</a>
       <a class="opt" href="#how">How it works</a>
       <a class="opt" href="#proof">Failure tests</a>
       <a href="https://github.com/prabuddh148/distribukv">GitHub</a>
@@ -132,21 +123,21 @@
       <span class="chip">Java 21</span><span class="chip">Spring Boot</span><span class="chip">Kafka</span><span class="chip">MySQL</span><span class="chip">Redis</span><span class="chip">Docker</span><span class="chip">Kubernetes</span><span class="chip">GitHub Actions</span><span class="chip">Testcontainers</span><span class="chip">Prometheus metrics</span>
     </div>
     <div class="actions">
-      <a class="btn primary" id="open-live" href="#live" aria-disabled="true">Open live dashboard ↗</a>
+      <a class="btn primary" href="#try">Break the cluster in your browser</a>
+      <a class="btn" id="open-live" href="#" target="_blank" rel="noopener" hidden>Open the real cluster ↗</a>
       <a class="btn" href="https://github.com/prabuddh148/distribukv">View source on GitHub</a>
     </div>
   </div>
 
-  <section id="live">
-    <div class="wrap">
+  <section id="try">
+    <div class="wrap wide">
+      <h2>Try it: break the cluster</h2>
+      <p class="sub">Write a key, kill or partition its replicas, and watch quorums fail, hints queue up and the Kafka log bring replicas back. Replica placement uses the same MD5 ring (256 virtual nodes) as the Java code, so these are exactly the replicas the real cluster picks.</p>
       <div class="card live">
-        <div class="live-head">
-          <span class="pill"><span class="dot" id="live-dot"></span><span id="live-label">Checking the live cluster…</span></span>
-          <span class="stack" id="live-stack"></span>
-        </div>
-        <div class="nodes" id="live-nodes"></div>
-        <p class="offline" id="live-offline" hidden>The live cluster is offline right now: it runs on demand (5 nodes + Kafka + MySQL + Redis). Everything below is verified automatically on every push; see the <a href="https://github.com/prabuddh148/distribukv/actions/workflows/ci.yml">CI runs</a>.</p>
+        <span class="pill"><span class="dot" id="live-dot"></span><span id="live-label">Checking whether the real cluster is online…</span></span>
+        <span class="muted" id="live-detail"></span>
       </div>
+      <div id="kv-sim" class="sim-host"></div>
     </div>
   </section>
 
@@ -172,20 +163,16 @@
             <rect class="d-box" x="10" y="140" width="110" height="54" rx="10"/>
             <text class="d-text" x="65" y="163" text-anchor="middle">Client</text>
             <text class="d-small" x="65" y="181" text-anchor="middle">PUT user:42</text>
-
             <rect class="d-core" x="180" y="128" width="170" height="78" rx="10"/>
             <text class="d-text" x="265" y="155" text-anchor="middle">Coordinator node</text>
             <text class="d-small" x="265" y="174" text-anchor="middle">hash(key) → ring</text>
             <text class="d-small" x="265" y="191" text-anchor="middle">→ 3 replicas</text>
-
             <rect class="d-box" x="200" y="18" width="130" height="50" rx="10"/>
             <text class="d-text" x="265" y="40" text-anchor="middle">Redis</text>
             <text class="d-small" x="265" y="57" text-anchor="middle">TTL heartbeats</text>
-
             <rect class="d-box" x="190" y="262" width="150" height="54" rx="10"/>
             <text class="d-text" x="265" y="285" text-anchor="middle">Kafka</text>
             <text class="d-small" x="265" y="302" text-anchor="middle">replication log</text>
-
             <rect class="d-box" x="440" y="30" width="140" height="54" rx="10"/>
             <text class="d-text" x="510" y="53" text-anchor="middle">Replica A</text>
             <text class="d-small" x="510" y="71" text-anchor="middle">ack ✓</text>
@@ -195,14 +182,12 @@
             <rect class="d-box" x="440" y="250" width="140" height="54" rx="10"/>
             <text class="d-text" x="510" y="273" text-anchor="middle">Replica C</text>
             <text class="d-small" x="510" y="291" text-anchor="middle">down → hint + log</text>
-
             <rect class="d-box" x="630" y="36" width="120" height="42" rx="8"/>
             <text class="d-small" x="690" y="62" text-anchor="middle">MySQL kv_A</text>
             <rect class="d-box" x="630" y="146" width="120" height="42" rx="8"/>
             <text class="d-small" x="690" y="172" text-anchor="middle">MySQL kv_B</text>
             <rect class="d-box" x="630" y="256" width="120" height="42" rx="8"/>
             <text class="d-small" x="690" y="282" text-anchor="middle">MySQL kv_C</text>
-
             <path class="d-line" d="M120 167 H176" marker-end="url(#arr)"/>
             <path class="d-line" d="M350 150 C 390 150, 400 57, 436 57" marker-end="url(#arr)"/>
             <path class="d-line" d="M350 167 H436" marker-end="url(#arr)"/>
@@ -243,23 +228,23 @@
   <section id="proof">
     <div class="wrap">
       <h2>Proven under failure</h2>
-      <p class="sub">These scenarios run automatically on every push: in JUnit, on a 5-container Docker Compose stack, and on Kubernetes.</p>
+      <p class="sub">On the real system, these scenarios run automatically on every push: in JUnit, on a Docker Compose stack (5 nodes + Kafka + MySQL + Redis), and on Kubernetes.</p>
       <div class="card table-wrap">
         <table>
           <thead><tr><th>Scenario</th><th>Expected behaviour</th><th>Result</th></tr></thead>
           <tbody>
-            <tr><td>Kill 1 of a key's 3 replicas</td><td>STRONG reads and writes keep succeeding</td><td class="ok">✓ 200</td></tr>
-            <tr><td>Kill 2 of 3 replicas</td><td>STRONG write rejected, EVENTUAL write accepted</td><td class="ok">✓ 503 / 200</td></tr>
-            <tr><td>Restart the killed replicas</td><td>They receive every write they missed</td><td class="ok">✓ converged</td></tr>
-            <tr><td>Network partition around a replica</td><td>Cluster routes around it; it catches up after healing</td><td class="ok">✓ ~1 s</td></tr>
-            <tr><td>Coordinator dies while a replica is down</td><td>The replica still gets the write from Kafka</td><td class="ok">✓</td></tr>
-            <tr><td>Delete a Kubernetes replica pod</td><td>Strong writes continue; replacement pod converges</td><td class="ok">✓</td></tr>
+            <tr><td>Kill 1 of a key's 3 replicas</td><td>STRONG reads and writes keep succeeding</td><td class="pass">✓ 200</td></tr>
+            <tr><td>Kill 2 of 3 replicas</td><td>STRONG write rejected, EVENTUAL write accepted</td><td class="pass">✓ 503 / 200</td></tr>
+            <tr><td>Restart the killed replicas</td><td>They receive every write they missed</td><td class="pass">✓ converged</td></tr>
+            <tr><td>Network partition around a replica</td><td>Cluster routes around it; it catches up after healing</td><td class="pass">✓ ~1 s</td></tr>
+            <tr><td>Coordinator dies while a replica is down</td><td>The replica still gets the write from Kafka</td><td class="pass">✓</td></tr>
+            <tr><td>Delete a Kubernetes replica pod</td><td>Strong writes continue; replacement pod converges</td><td class="pass">✓</td></tr>
           </tbody>
         </table>
       </div>
-      <details>
+      <details class="ci">
         <summary>Show real CI output (Docker Compose: 5 nodes + Kafka + MySQL + Redis)</summary>
-<pre>[ 35s] cluster healthy - stack: {"replicationLog":"kafka:kv-replication","storage":"mysql","membership":"redis"}
+<pre class="ci-log">[ 35s] cluster healthy - stack: {"replicationLog":"kafka:kv-replication","storage":"mysql","membership":"redis"}
 [ 35s] key chaos:1789297733 -> replicas node5 node1 node3, coordinator node2
 [ 35s] --- scenario 1: one replica crashes
 [ 35s] ok  - strong PUT v1 (HTTP 200)
@@ -330,13 +315,13 @@ kv-node5  kv-replication  5          5               5               0
       <h2>Delivery pipeline</h2>
       <p class="sub">Every push to <code>main</code> runs this in GitHub Actions.</p>
       <div class="pipeline">
-        <span class="card stage">Build + 33 tests<br><small class="stack">Testcontainers: Kafka, MySQL, Redis</small></span>
+        <span class="card stage">Build + 33 tests<br><small class="muted">Testcontainers: Kafka, MySQL, Redis</small></span>
         <span class="arrow">→</span>
-        <span class="card stage">Chaos tests<br><small class="stack">Docker Compose, full stack</small></span>
+        <span class="card stage">Chaos tests<br><small class="muted">Docker Compose, full stack</small></span>
         <span class="arrow">→</span>
-        <span class="card stage">Deploy to Kubernetes<br><small class="stack">kind + pod-kill smoke test</small></span>
+        <span class="card stage">Deploy to Kubernetes<br><small class="muted">kind + pod-kill smoke test</small></span>
         <span class="arrow">→</span>
-        <span class="card stage">Publish image<br><small class="stack">GHCR</small></span>
+        <span class="card stage">Publish image<br><small class="muted">GHCR</small></span>
       </div>
     </div>
   </section>
@@ -349,66 +334,55 @@ kv-node5  kv-replication  5          5               5               0
   </div>
 </footer>
 
+<script src="sim.js"></script>
+<script src="dashboard.js"></script>
 <script>
-const GIST_ID = 'fe973feaf3679bb03996fd0fbb399bee';
-const $ = id => document.getElementById(id);
-let liveUrl = null;
+(function () {
+  const $ = id => document.getElementById(id);
 
-function timeout(ms) {
-  const controller = new AbortController();
-  setTimeout(() => controller.abort(), ms);
-  return controller.signal;
-}
+  KvDashboard.mount($('kv-sim'), KvDashboard.simulationAdapter(), {});
 
-function showOffline() {
-  $('live-dot').className = 'dot off';
-  $('live-label').textContent = 'Live cluster offline';
-  $('live-stack').textContent = '';
-  $('live-nodes').innerHTML = '';
-  $('live-offline').hidden = false;
-  $('open-live').setAttribute('aria-disabled', 'true');
-}
+  // When the real cluster is running, point visitors at it too.
+  const GIST_ID = 'fe973feaf3679bb03996fd0fbb399bee';
+  let liveUrl = null;
 
-function render(status) {
-  const up = status.nodes.filter(n => n.stats && n.status === 'UP' && !n.stats.isolated).length;
-  $('live-dot').className = 'dot on';
-  $('live-label').textContent = `Live cluster online · ${up}/${status.nodes.length} nodes healthy`;
-  $('live-stack').textContent = `storage: ${status.stack.storage} · log: ${status.stack.replicationLog} · failure detection: ${status.stack.membership}`;
-  $('live-offline').hidden = true;
-  $('live-nodes').innerHTML = status.nodes.map(n => {
-    const state = n.stats && n.stats.isolated ? 'ISOLATED' : (n.stats ? n.status : 'DOWN');
-    const keys = n.stats ? n.stats.keys : '–';
-    const lag = n.stats && n.stats.replicationLagMs != null && n.stats.replicationLagMs >= 0 ? n.stats.replicationLagMs + ' ms' : '–';
-    return `<div class="node"><b>${n.id}<span class="state ${state}">${state}</span></b><span>${keys} keys</span><span>log lag ${lag}</span></div>`;
-  }).join('');
-  const open = $('open-live');
-  open.href = liveUrl;
-  open.target = '_blank';
-  open.rel = 'noopener';
-  open.removeAttribute('aria-disabled');
-}
+  const timeout = ms => { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal; };
 
-async function poll() {
-  try {
-    const res = await fetch(liveUrl + '/cluster/status', { signal: timeout(8000) });
-    if (!res.ok) throw new Error(res.status);
-    render(await res.json());
-  } catch (e) {
-    showOffline();
+  function showOffline() {
+    $('live-dot').className = 'dot';
+    $('live-label').textContent = 'Simulation mode: the real cluster is not running right now';
+    $('live-detail').textContent = 'The dashboard below behaves like the real one and never goes down.';
+    $('open-live').hidden = true;
   }
-}
 
-(async () => {
-  try {
-    const gist = await (await fetch(`https://api.github.com/gists/${GIST_ID}`, { cache: 'no-store', signal: timeout(8000) })).json();
-    const info = JSON.parse(gist.files['distribukv-live.json'].content);
-    if (info.status !== 'online' || !info.url) return showOffline();
-    liveUrl = info.url;
-    await poll();
-    setInterval(poll, 5000);
-  } catch (e) {
-    showOffline();
+  async function poll() {
+    try {
+      const res = await fetch(liveUrl + '/cluster/status', { signal: timeout(8000) });
+      if (!res.ok) throw new Error(String(res.status));
+      const status = await res.json();
+      const healthy = status.nodes.filter(n => n.stats && n.status === 'UP' && !n.stats.isolated).length;
+      $('live-dot').className = 'dot on';
+      $('live-label').textContent = `The real cluster is online · ${healthy}/${status.nodes.length} nodes healthy`;
+      $('live-detail').innerHTML = `${status.stack.storage} · ${status.stack.replicationLog} · ${status.stack.membership} · <a href="${liveUrl}" target="_blank" rel="noopener">open its dashboard ↗</a>`;
+      $('open-live').href = liveUrl;
+      $('open-live').hidden = false;
+    } catch (e) {
+      showOffline();
+    }
   }
+
+  (async () => {
+    try {
+      const gist = await (await fetch(`https://api.github.com/gists/${GIST_ID}`, { cache: 'no-store', signal: timeout(8000) })).json();
+      const info = JSON.parse(gist.files['distribukv-live.json'].content);
+      if (info.status !== 'online' || !/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(info.url || '')) return showOffline();
+      liveUrl = info.url;
+      await poll();
+      setInterval(poll, 10000);
+    } catch (e) {
+      showOffline();
+    }
+  })();
 })();
 </script>
 </body>

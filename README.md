@@ -2,7 +2,7 @@
 
 [![CI/CD](https://github.com/prabuddh148/distribukv/actions/workflows/ci.yml/badge.svg)](https://github.com/prabuddh148/distribukv/actions/workflows/ci.yml)
 
-**Project page:** https://prabuddh148.github.io/distribukv/ (architecture, verified failure tests, benchmarks, and the live cluster whenever the demo is running)
+**Project page:** https://prabuddh148.github.io/distribukv/ has an interactive dashboard that is always available (a browser simulation that uses the same ring placement and quorum rules as the Java code), plus architecture, verified failure tests, benchmarks, and a link to the real cluster whenever it is running.
 
 A small, working distributed key-value store in the style of Amazon Dynamo / Cassandra, written in Java 21 + Spring Boot, with **Kafka**, **MySQL** and **Redis** as optional infrastructure adapters.
 
