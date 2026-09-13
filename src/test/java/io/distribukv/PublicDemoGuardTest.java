@@ -40,6 +40,7 @@ class PublicDemoGuardTest {
                 "--kv.public-demo.enabled=true",
                 "--kv.public-demo.requests-per-second=2",
                 "--kv.public-demo.max-value-bytes=10",
+                "--kv.public-demo.allowed-origins=https://example.github.io",
                 "--spring.main.banner-mode=off",
                 "--logging.level.root=WARN");
     }
@@ -77,6 +78,18 @@ class PublicDemoGuardTest {
         }
         assertThat(limited).isPositive();
         assertThat(send("GET", "/cluster/status", "203.0.113.4", null)).isEqualTo(200);
+    }
+
+    @Test
+    void projectPageOriginMayReadClusterStatusButOtherOriginsMayNot() throws Exception {
+        HttpResponse<Void> allowed = HTTP.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/cluster/status"))
+                .header("Origin", "https://example.github.io").GET().build(), HttpResponse.BodyHandlers.discarding());
+        assertThat(allowed.statusCode()).isEqualTo(200);
+        assertThat(allowed.headers().firstValue("Access-Control-Allow-Origin")).contains("https://example.github.io");
+
+        HttpResponse<Void> denied = HTTP.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/cluster/status"))
+                .header("Origin", "https://evil.example").GET().build(), HttpResponse.BodyHandlers.discarding());
+        assertThat(denied.statusCode()).isEqualTo(403);
     }
 
     private static int send(String method, String path, String clientIp, String body) throws Exception {

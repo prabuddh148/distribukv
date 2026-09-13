@@ -55,11 +55,15 @@ public record ClusterProperties(
             @DefaultValue("redis://localhost:6379") String url) {
     }
 
-    /** Guard rails for traffic arriving through a public tunnel. */
+    /**
+     * Guard rails for traffic arriving through a public tunnel. {@code allowedOrigins} lets a static
+     * project page (e.g. GitHub Pages) read the live cluster status from the browser.
+     */
     public record PublicDemo(
             @DefaultValue("false") boolean enabled,
             @DefaultValue("10") int requestsPerSecond,
-            @DefaultValue("4096") int maxValueBytes) {
+            @DefaultValue("4096") int maxValueBytes,
+            List<String> allowedOrigins) {
     }
 
     public ClusterProperties {

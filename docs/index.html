@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DistribuKV · Distributed Key-Value Store</title>
+<meta name="description" content="A Dynamo-style distributed key-value store: consistent hashing, tunable quorum consistency, Kafka replication log, MySQL storage, Redis failure detection. Java 21, Spring Boot, Docker, Kubernetes.">
+<meta property="og:title" content="DistribuKV · Distributed Key-Value Store">
+<meta property="og:description" content="Consistent hashing, quorum replication, Kafka replication log, MySQL storage, Redis failure detection, chaos-tested in CI.">
+<style>
+  :root {
+    --bg: #fbfbfa; --surface: #ffffff; --ink: #16181d; --muted: #5d6470; --line: #e3e5e8;
+    --accent: #0f766e; --accent-soft: #e6f3f1; --up: #15803d; --down: #b91c1c; --warn: #a16207;
+    --code-bg: #f3f4f6; --shadow: 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1014; --surface: #151a20; --ink: #e8eaed; --muted: #9aa3ae; --line: #262d36;
+      --accent: #2dd4bf; --accent-soft: #10302d; --up: #4ade80; --down: #f87171; --warn: #facc15;
+      --code-bg: #0f1318; --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding-inline: 20px; }
+  header.top { border-bottom: 1px solid var(--line); background: var(--surface); }
+  header.top .wrap { display: flex; justify-content: space-between; align-items: center; height: 56px; }
+  .brand { font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
+  nav a { margin-left: 20px; color: var(--muted); font-size: 14px; }
+  @media (max-width: 640px) { nav a.opt { display: none; } }
+
+  .hero { padding-block: 64px 32px; }
+  .eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 12px; }
+  h1 { font-size: clamp(34px, 6vw, 52px); line-height: 1.08; letter-spacing: -.025em; margin: 0 0 18px; }
+  .lede { font-size: 19px; color: var(--muted); max-width: 720px; margin: 0 0 24px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
+  .chip { font-size: 13px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); }
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 15px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+  .btn:hover { text-decoration: none; border-color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  @media (prefers-color-scheme: dark) { .btn.primary { color: #062320; } }
+  .btn[aria-disabled="true"] { opacity: .5; pointer-events: none; }
+
+  section { padding-block: 40px; }
+  h2 { font-size: 26px; letter-spacing: -.015em; margin: 0 0 8px; }
+  .sub { color: var(--muted); margin: 0 0 24px; max-width: 720px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+
+  .live { padding: 20px; }
+  .live-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 16px; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  .dot.on { background: var(--up); box-shadow: 0 0 0 4px color-mix(in srgb, var(--up) 20%, transparent); }
+  .dot.off { background: var(--down); }
+  .stack { font-size: 14px; color: var(--muted); }
+  .nodes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .node { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+  .node b { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .state { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; color: #fff; }
+  .UP { background: var(--up); } .DOWN { background: var(--down); } .ISOLATED { background: var(--warn); }
+  @media (prefers-color-scheme: dark) { .state { color: #0d1014; } }
+  .node span { color: var(--muted); display: block; font-variant-numeric: tabular-nums; }
+  .offline { color: var(--muted); margin: 0; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  .stat { padding: 18px; }
+  .stat strong { display: block; font-size: 28px; letter-spacing: -.02em; }
+  .stat span { color: var(--muted); font-size: 14px; }
+
+  .diagram { padding: 16px; overflow-x: auto; }
+  .diagram svg { min-width: 680px; width: 100%; height: auto; display: block; }
+  .d-box { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+  .d-core { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+  .d-text { fill: var(--ink); font: 600 14px ui-sans-serif, system-ui, sans-serif; }
+  .d-small { fill: var(--muted); font: 12px ui-sans-serif, system-ui, sans-serif; }
+  .d-line { stroke: var(--ink); stroke-width: 1.5; fill: none; }
+  .d-dash { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 4; fill: none; }
+  .steps { margin: 16px 0 0; padding-left: 20px; color: var(--muted); }
+  .steps li { margin-bottom: 6px; }
+  .steps b { color: var(--ink); }
+
+  .grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+  .feature { padding: 18px 20px; }
+  .feature h3 { font-size: 16px; margin: 0 0 6px; }
+  .feature p { margin: 0; color: var(--muted); font-size: 15px; }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  th { font-size: 13px; color: var(--muted); font-weight: 600; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr:last-child td { border-bottom: 0; }
+  .ok { color: var(--up); font-weight: 600; white-space: nowrap; }
+  details { margin-top: 14px; }
+  summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 14px; overflow-x: auto; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+  .qa { padding: 18px 20px; }
+  .qa h3 { font-size: 16px; margin: 0 0 6px; }
+  .qa p { margin: 0; color: var(--muted); font-size: 15px; }
+
+  .pipeline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .stage { padding: 10px 14px; font-size: 14px; }
+  .arrow { color: var(--muted); }
+
+  footer { border-top: 1px solid var(--line); padding-block: 28px; color: var(--muted); font-size: 14px; margin-top: 24px; }
+  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#">DistribuKV</a>
+    <nav>
+      <a class="opt" href="#how">How it works</a>
+      <a class="opt" href="#proof">Failure tests</a>
+      <a href="https://github.com/prabuddh148/distribukv">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <p class="eyebrow">Distributed systems project</p>
+    <h1>A Dynamo-style distributed<br>key-value store</h1>
+    <p class="lede">Data is sharded across nodes with consistent hashing, replicated three times, and served with per-request <b>STRONG</b> (quorum) or <b>EVENTUAL</b> consistency. It keeps working when nodes crash or get partitioned, and every failure scenario is tested automatically in CI.</p>
+    <div class="chips">
+      <span class="chip">Java 21</span><span class="chip">Spring Boot</span><span class="chip">Kafka</span><span class="chip">MySQL</span><span class="chip">Redis</span><span class="chip">Docker</span><span class="chip">Kubernetes</span><span class="chip">GitHub Actions</span><span class="chip">Testcontainers</span><span class="chip">Prometheus metrics</span>
+    </div>
+    <div class="actions">
+      <a class="btn primary" id="open-live" href="#live" aria-disabled="true">Open live dashboard ↗</a>
+      <a class="btn" href="https://github.com/prabuddh148/distribukv">View source on GitHub</a>
+    </div>
+  </div>
+
+  <section id="live">
+    <div class="wrap">
+      <div class="card live">
+        <div class="live-head">
+          <span class="pill"><span class="dot" id="live-dot"></span><span id="live-label">Checking the live cluster…</span></span>
+          <span class="stack" id="live-stack"></span>
+        </div>
+        <div class="nodes" id="live-nodes"></div>
+        <p class="offline" id="live-offline" hidden>The live cluster is offline right now: it runs on demand (5 nodes + Kafka + MySQL + Redis). Everything below is verified automatically on every push; see the <a href="https://github.com/prabuddh148/distribukv/actions/workflows/ci.yml">CI runs</a>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap stats">
+      <div class="card stat"><strong>5</strong><span>nodes, any of them can coordinate a request</span></div>
+      <div class="card stat"><strong>N = 3</strong><span>replicas per key, W = R = 2 for STRONG</span></div>
+      <div class="card stat"><strong>33</strong><span>automated tests, incl. real Kafka / MySQL / Redis</span></div>
+      <div class="card stat"><strong>0</strong><span>errors across 20,000 benchmark operations</span></div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <h2>How a write works</h2>
+      <p class="sub">There is no leader. The node that receives the request becomes the coordinator for it.</p>
+      <div class="card diagram">
+        <svg viewBox="0 0 760 330" role="img" aria-label="Client sends a write to a coordinator node, which writes to three replicas in parallel, appends to Kafka, while all nodes heartbeat to Redis and each replica stores data in its own MySQL database">
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+          </defs>
+          <g style="color: var(--ink)">
+            <rect class="d-box" x="10" y="140" width="110" height="54" rx="10"/>
+            <text class="d-text" x="65" y="163" text-anchor="middle">Client</text>
+            <text class="d-small" x="65" y="181" text-anchor="middle">PUT user:42</text>
+
+            <rect class="d-core" x="180" y="128" width="170" height="78" rx="10"/>
+            <text class="d-text" x="265" y="155" text-anchor="middle">Coordinator node</text>
+            <text class="d-small" x="265" y="174" text-anchor="middle">hash(key) → ring</text>
+            <text class="d-small" x="265" y="191" text-anchor="middle">→ 3 replicas</text>
+
+            <rect class="d-box" x="200" y="18" width="130" height="50" rx="10"/>
+            <text class="d-text" x="265" y="40" text-anchor="middle">Redis</text>
+            <text class="d-small" x="265" y="57" text-anchor="middle">TTL heartbeats</text>
+
+            <rect class="d-box" x="190" y="262" width="150" height="54" rx="10"/>
+            <text class="d-text" x="265" y="285" text-anchor="middle">Kafka</text>
+            <text class="d-small" x="265" y="302" text-anchor="middle">replication log</text>
+
+            <rect class="d-box" x="440" y="30" width="140" height="54" rx="10"/>
+            <text class="d-text" x="510" y="53" text-anchor="middle">Replica A</text>
+            <text class="d-small" x="510" y="71" text-anchor="middle">ack ✓</text>
+            <rect class="d-box" x="440" y="140" width="140" height="54" rx="10"/>
+            <text class="d-text" x="510" y="163" text-anchor="middle">Replica B</text>
+            <text class="d-small" x="510" y="181" text-anchor="middle">ack ✓ → quorum</text>
+            <rect class="d-box" x="440" y="250" width="140" height="54" rx="10"/>
+            <text class="d-text" x="510" y="273" text-anchor="middle">Replica C</text>
+            <text class="d-small" x="510" y="291" text-anchor="middle">down → hint + log</text>
+
+            <rect class="d-box" x="630" y="36" width="120" height="42" rx="8"/>
+            <text class="d-small" x="690" y="62" text-anchor="middle">MySQL kv_A</text>
+            <rect class="d-box" x="630" y="146" width="120" height="42" rx="8"/>
+            <text class="d-small" x="690" y="172" text-anchor="middle">MySQL kv_B</text>
+            <rect class="d-box" x="630" y="256" width="120" height="42" rx="8"/>
+            <text class="d-small" x="690" y="282" text-anchor="middle">MySQL kv_C</text>
+
+            <path class="d-line" d="M120 167 H176" marker-end="url(#arr)"/>
+            <path class="d-line" d="M350 150 C 390 150, 400 57, 436 57" marker-end="url(#arr)"/>
+            <path class="d-line" d="M350 167 H436" marker-end="url(#arr)"/>
+            <path class="d-dash" d="M350 184 C 390 184, 400 277, 436 277" marker-end="url(#arr)"/>
+            <path class="d-line" d="M265 206 V258" marker-end="url(#arr)"/>
+            <path class="d-dash" d="M340 300 C 380 318, 410 300, 436 290" marker-end="url(#arr)"/>
+            <path class="d-dash" d="M265 124 V72" marker-end="url(#arr)"/>
+            <path class="d-line" d="M580 57 H626" marker-end="url(#arr)"/>
+            <path class="d-line" d="M580 167 H626" marker-end="url(#arr)"/>
+            <path class="d-line" d="M580 277 H626" marker-end="url(#arr)"/>
+          </g>
+        </svg>
+        <ol class="steps">
+          <li><b>Partition:</b> the key is hashed onto a ring with 256 virtual nodes per server; the next 3 distinct servers clockwise own it.</li>
+          <li><b>Replicate:</b> the coordinator writes to all 3 in parallel and answers when 2 confirm (STRONG) or when Kafka has durably stored the write (EVENTUAL).</li>
+          <li><b>Recover:</b> a replica that missed the write gets it from a hint as soon as it is back, or from the Kafka log, even if the coordinator crashed meanwhile.</li>
+          <li><b>Detect failures:</b> nodes refresh TTL keys in Redis every 500 ms; a missing key marks a node DOWN, and HTTP heartbeats take over if Redis itself fails.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>What's inside</h2>
+      <p class="sub">Each piece maps to a question asked in system design interviews, and is implemented rather than described.</p>
+      <div class="grid3">
+        <div class="card feature"><h3>Consistent hashing</h3><p>Adding a 5th node moves ~20% of keys instead of ~80% with modulo hashing, which a unit test measures. The virtual-node count was chosen from measurements.</p></div>
+        <div class="card feature"><h3>Tunable consistency</h3><p>STRONG uses R + W > N majority quorums; EVENTUAL waits for one durable acknowledgement. With 2 of 3 replicas down, STRONG returns 503 and EVENTUAL keeps serving: CAP in practice.</p></div>
+        <div class="card feature"><h3>Kafka replication log</h3><p>Writes are keyed by data key so each key stays ordered in one partition. Every node is its own consumer group with static membership and resumes from committed offsets after a crash.</p></div>
+        <div class="card feature"><h3>MySQL storage per node</h3><p>Each node owns its own database. Last-write-wins is enforced atomically in SQL, so a write from a hint, a peer and the log at the same time can never go back to an older version.</p></div>
+        <div class="card feature"><h3>Failure handling</h3><p>Heartbeat failure detection, hinted handoff, read repair and a partition simulator that isolates a node from peers, Redis and Kafka at once.</p></div>
+        <div class="card feature"><h3>Production habits</h3><p>Prometheus metrics (latency percentiles, replication lag, hint backlog), structured JSON logs, Kubernetes StatefulSet, and a CI pipeline that deploys and breaks the cluster on every push.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="proof">
+    <div class="wrap">
+      <h2>Proven under failure</h2>
+      <p class="sub">These scenarios run automatically on every push: in JUnit, on a 5-container Docker Compose stack, and on Kubernetes.</p>
+      <div class="card table-wrap">
+        <table>
+          <thead><tr><th>Scenario</th><th>Expected behaviour</th><th>Result</th></tr></thead>
+          <tbody>
+            <tr><td>Kill 1 of a key's 3 replicas</td><td>STRONG reads and writes keep succeeding</td><td class="ok">✓ 200</td></tr>
+            <tr><td>Kill 2 of 3 replicas</td><td>STRONG write rejected, EVENTUAL write accepted</td><td class="ok">✓ 503 / 200</td></tr>
+            <tr><td>Restart the killed replicas</td><td>They receive every write they missed</td><td class="ok">✓ converged</td></tr>
+            <tr><td>Network partition around a replica</td><td>Cluster routes around it; it catches up after healing</td><td class="ok">✓ ~1 s</td></tr>
+            <tr><td>Coordinator dies while a replica is down</td><td>The replica still gets the write from Kafka</td><td class="ok">✓</td></tr>
+            <tr><td>Delete a Kubernetes replica pod</td><td>Strong writes continue; replacement pod converges</td><td class="ok">✓</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <details>
+        <summary>Show real CI output (Docker Compose: 5 nodes + Kafka + MySQL + Redis)</summary>
+<pre>[ 35s] cluster healthy - stack: {"replicationLog":"kafka:kv-replication","storage":"mysql","membership":"redis"}
+[ 35s] key chaos:1789297733 -> replicas node5 node1 node3, coordinator node2
+[ 35s] --- scenario 1: one replica crashes
+[ 35s] ok  - strong PUT v1 (HTTP 200)
+[ 36s] killed node5
+[ 36s] ok  - strong GET with 2/3 replicas (HTTP 200)
+[ 36s] ok  - strong PUT v2 with 2/3 replicas (HTTP 200)
+[ 36s] --- scenario 2: quorum lost (two replicas down)
+[ 36s] killed node1
+[ 37s] ok  - strong PUT rejected without quorum (HTTP 503)
+[ 37s] ok  - eventual PUT accepted with 1/3 replicas (HTTP 200)
+[ 37s] ok  - eventual GET with 1/3 replicas (HTTP 200)
+[ 37s] --- scenario 3: recovery via hinted handoff
+[ 38s] restarted node5
+[ 39s] restarted node1
+[ 51s] ok  - node5 converged to 'v3'
+[ 51s] ok  - node1 converged to 'v3'
+[ 51s] --- scenario 4: network partition around a replica
+[ 51s] ok  - isolate node3 (HTTP 200)
+[ 51s] ok  - isolated node refuses traffic (HTTP 503)
+[ 51s] ok  - strong PUT during partition (HTTP 200)
+[ 51s] ok  - heal node3 (HTTP 200)
+[ 51s] ok  - node3 converged to 'v4'
+[ 51s] --- evidence from the infrastructure
+[ 51s] ok  - node3's own MySQL database (kv_node3) holds 'v4'
+[ 51s] Kafka consumer group of node5 (replication log offsets and lag):
+GROUP     TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG
+kv-node5  kv-replication  5          5               5               0
+[ 53s] ALL FAILURE SCENARIOS PASSED</pre>
+      </details>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>Benchmarks</h2>
+      <p class="sub">5 nodes, Kafka, MySQL and Redis sharing one laptop with the load generator; 5,000 operations per row, 32 concurrent clients. Absolute numbers are a floor; the ratio between the modes is the point.</p>
+      <div class="card table-wrap">
+        <table>
+          <thead><tr><th>Consistency</th><th>Operation</th><th class="num">Throughput (ops/s)</th><th class="num">p50 (ms)</th><th class="num">p99 (ms)</th><th class="num">Errors</th></tr></thead>
+          <tbody>
+            <tr><td>STRONG</td><td>PUT</td><td class="num">328</td><td class="num">86.7</td><td class="num">265.3</td><td class="num">0</td></tr>
+            <tr><td>STRONG</td><td>GET</td><td class="num">530</td><td class="num">46.7</td><td class="num">230.7</td><td class="num">0</td></tr>
+            <tr><td>EVENTUAL</td><td>PUT</td><td class="num">573</td><td class="num">48.0</td><td class="num">161.5</td><td class="num">0</td></tr>
+            <tr><td>EVENTUAL</td><td>GET</td><td class="num">1,086</td><td class="num">20.1</td><td class="num">169.6</td><td class="num">0</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>Design decisions</h2>
+      <p class="sub">The trade-offs behind the implementation. The <a href="https://github.com/prabuddh148/distribukv#design-decisions--trade-offs">README</a> has the full list.</p>
+      <div class="grid3">
+        <div class="card qa"><h3>Why leaderless instead of Raft?</h3><p>No election and no failover pause: any 2 of 3 replicas can serve a STRONG request, and consistency becomes a per-request choice. Raft would be the right call for linearizable compare-and-set.</p></div>
+        <div class="card qa"><h3>Why isn't Kafka on the STRONG path?</h3><p>STRONG promises that 2 replicas stored the write, which needs their direct acknowledgements. For EVENTUAL, the durable log <i>is</i> the guarantee, so the write is acknowledged once Kafka has it.</p></div>
+        <div class="card qa"><h3>Why can Redis fail safely?</h3><p>Redis only speeds up failure detection (one read for the whole cluster). If it is unreachable, nodes fall back to HTTP heartbeats, so it is not a single point of failure.</p></div>
+        <div class="card qa"><h3>How are conflicts resolved?</h3><p>Last-write-wins on a hybrid logical clock, with tombstones for deletes. Honest limit: clock skew can drop a concurrent write; vector clocks would detect it.</p></div>
+        <div class="card qa"><h3>Is a failed STRONG write rolled back?</h3><p>No, as in Dynamo and Cassandra: a 503 means "unknown outcome". Writes are idempotent, so clients retry safely.</p></div>
+        <div class="card qa"><h3>What would come next?</h3><p>Dynamic membership with range streaming, Merkle-tree anti-entropy, vector clocks and an LSM storage engine.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>Delivery pipeline</h2>
+      <p class="sub">Every push to <code>main</code> runs this in GitHub Actions.</p>
+      <div class="pipeline">
+        <span class="card stage">Build + 33 tests<br><small class="stack">Testcontainers: Kafka, MySQL, Redis</small></span>
+        <span class="arrow">→</span>
+        <span class="card stage">Chaos tests<br><small class="stack">Docker Compose, full stack</small></span>
+        <span class="arrow">→</span>
+        <span class="card stage">Deploy to Kubernetes<br><small class="stack">kind + pod-kill smoke test</small></span>
+        <span class="arrow">→</span>
+        <span class="card stage">Publish image<br><small class="stack">GHCR</small></span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Built by <a href="https://github.com/prabuddh148">Prabuddh Agarwal</a></span>
+    <span><a href="https://github.com/prabuddh148/distribukv">Source</a> · <a href="https://github.com/prabuddh148/distribukv/actions/workflows/ci.yml">CI runs</a></span>
+  </div>
+</footer>
+
+<script>
+const GIST_ID = 'fe973feaf3679bb03996fd0fbb399bee';
+const $ = id => document.getElementById(id);
+let liveUrl = null;
+
+function timeout(ms) {
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), ms);
+  return controller.signal;
+}
+
+function showOffline() {
+  $('live-dot').className = 'dot off';
+  $('live-label').textContent = 'Live cluster offline';
+  $('live-stack').textContent = '';
+  $('live-nodes').innerHTML = '';
+  $('live-offline').hidden = false;
+  $('open-live').setAttribute('aria-disabled', 'true');
+}
+
+function render(status) {
+  const up = status.nodes.filter(n => n.stats && n.status === 'UP' && !n.stats.isolated).length;
+  $('live-dot').className = 'dot on';
+  $('live-label').textContent = `Live cluster online · ${up}/${status.nodes.length} nodes healthy`;
+  $('live-stack').textContent = `storage: ${status.stack.storage} · log: ${status.stack.replicationLog} · failure detection: ${status.stack.membership}`;
+  $('live-offline').hidden = true;
+  $('live-nodes').innerHTML = status.nodes.map(n => {
+    const state = n.stats && n.stats.isolated ? 'ISOLATED' : (n.stats ? n.status : 'DOWN');
+    const keys = n.stats ? n.stats.keys : '–';
+    const lag = n.stats && n.stats.replicationLagMs != null && n.stats.replicationLagMs >= 0 ? n.stats.replicationLagMs + ' ms' : '–';
+    return `<div class="node"><b>${n.id}<span class="state ${state}">${state}</span></b><span>${keys} keys</span><span>log lag ${lag}</span></div>`;
+  }).join('');
+  const open = $('open-live');
+  open.href = liveUrl;
+  open.target = '_blank';
+  open.rel = 'noopener';
+  open.removeAttribute('aria-disabled');
+}
+
+async function poll() {
+  try {
+    const res = await fetch(liveUrl + '/cluster/status', { signal: timeout(8000) });
+    if (!res.ok) throw new Error(res.status);
+    render(await res.json());
+  } catch (e) {
+    showOffline();
+  }
+}
+
+(async () => {
+  try {
+    const gist = await (await fetch(`https://api.github.com/gists/${GIST_ID}`, { cache: 'no-store', signal: timeout(8000) })).json();
+    const info = JSON.parse(gist.files['distribukv-live.json'].content);
+    if (info.status !== 'online' || !info.url) return showOffline();
+    liveUrl = info.url;
+    await poll();
+    setInterval(poll, 5000);
+  } catch (e) {
+    showOffline();
+  }
+})();
+</script>
+</body>
+</html>

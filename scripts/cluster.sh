@@ -38,7 +38,8 @@ start_node() {
             --kv.redis.enabled=true --kv.redis.url=redis://127.0.0.1:6379)
   fi
   if [[ "${PUBLIC_DEMO:-}" == true ]]; then
-    extra+=(--kv.public-demo.enabled=true --kv.chaos-auto-heal-seconds=60)
+    extra+=(--kv.public-demo.enabled=true --kv.chaos-auto-heal-seconds=60
+            "--kv.public-demo.allowed-origins=${DEMO_ORIGIN:-https://prabuddh148.github.io}")
   fi
   nohup java -Xmx200m -jar "$JAR" \
     --server.port="$(port "$i")" \
