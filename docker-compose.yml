@@ -1,0 +1,45 @@
+# 5-node DistribuKV cluster. Dashboard: http://localhost:8081
+#   docker compose up -d --build
+#   scripts/chaos-test.sh compose
+x-node: &node
+  build: .
+  image: distribukv:local
+  restart: "no"
+  environment: &env
+    KV_CLUSTER: node1=http://node1:8080,node2=http://node2:8080,node3=http://node3:8080,node4=http://node4:8080,node5=http://node5:8080
+    KV_REPLICATION_FACTOR: "3"
+    JAVA_TOOL_OPTIONS: -Xmx200m
+
+services:
+  node1:
+    <<: *node
+    environment: { <<: *env, KV_NODE_ID: node1 }
+    ports: ["8081:8080"]
+    volumes: ["node1-data:/data"]
+  node2:
+    <<: *node
+    environment: { <<: *env, KV_NODE_ID: node2 }
+    ports: ["8082:8080"]
+    volumes: ["node2-data:/data"]
+  node3:
+    <<: *node
+    environment: { <<: *env, KV_NODE_ID: node3 }
+    ports: ["8083:8080"]
+    volumes: ["node3-data:/data"]
+  node4:
+    <<: *node
+    environment: { <<: *env, KV_NODE_ID: node4 }
+    ports: ["8084:8080"]
+    volumes: ["node4-data:/data"]
+  node5:
+    <<: *node
+    environment: { <<: *env, KV_NODE_ID: node5 }
+    ports: ["8085:8080"]
+    volumes: ["node5-data:/data"]
+
+volumes:
+  node1-data:
+  node2-data:
+  node3-data:
+  node4-data:
+  node5-data:
