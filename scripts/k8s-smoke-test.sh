@@ -26,7 +26,11 @@ done
 curl -s $API/cluster/status; echo
 
 curl -sf -X PUT -H 'Content-Type: text/plain' --data-raw v1 "$API/kv/$KEY?consistency=STRONG"; echo
-VICTIM=$(curl -s "$API/cluster/ring?key=$KEY" | grep -o 'distribukv-[0-9]' | grep -v '^distribukv-0$' | head -1)
+RING=$(curl -s "$API/cluster/ring?key=$KEY")
+VICTIM=""
+for pod in $(grep -o 'distribukv-[0-9]' <<< "$RING"); do
+  if [[ "$pod" != distribukv-0 ]]; then VICTIM=$pod; break; fi
+done
 echo "deleting replica pod $VICTIM"
 kubectl -n "$NS" delete pod "$VICTIM" --wait=false
 

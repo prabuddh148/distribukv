@@ -63,7 +63,10 @@ log "cluster healthy"
 
 replicas=$(curl -s "$(url 1)/cluster/ring?key=$KEY" | grep -o 'node[0-9]*' | sed 's/node//' | tr '\n' ' ')
 read -r R1 R2 R3 <<< "$replicas"
-C=$(for i in $(seq 1 $NODES); do [[ " $R1 $R2 $R3 " == *" $i "* ]] || echo "$i"; done | head -1)
+C=""
+for i in $(seq 1 $NODES); do
+  if [[ " $R1 $R2 $R3 " != *" $i "* ]]; then C=$i; break; fi
+done
 log "key $KEY -> replicas node$R1 node$R2 node$R3, coordinator node$C"
 
 log "--- scenario 1: one replica crashes"
