@@ -6,9 +6,12 @@ set -euo pipefail
 BASE="${1:-http://localhost:7860}"
 echo "waiting for the stack at $BASE"
 S=""
+# Nodes start out optimistic ("UP" before the first heartbeat), so wait until every node reports
+# its own stats and failure detection has switched to Redis.
 for _ in $(seq 1 100); do
   S=$(curl -s --max-time 5 "$BASE/cluster/status" || true)
-  [[ "$(grep -o '"status":"UP"' <<< "$S" | wc -l)" -eq 5 ]] && break
+  [[ "$(grep -o '"stats":{' <<< "$S" | wc -l)" -eq 5 && "$(grep -o '"status":"UP"' <<< "$S" | wc -l)" -eq 5 ]] \
+    && grep -q '"membership":"redis"' <<< "$S" && break
   sleep 3
 done
 echo "${S:0:700}"

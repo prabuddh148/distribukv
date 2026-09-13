@@ -19,8 +19,10 @@ forward distribukv-0 18080
 API=http://localhost:18080
 
 echo "waiting for every node to see a fully UP cluster"
+# Nodes start out optimistic ("UP" before the first heartbeat), so also require every node's stats.
 for _ in $(seq 1 90); do
-  [[ "$(curl -s $API/cluster/status | grep -o '"status":"UP"' | wc -l)" -eq 5 ]] && break
+  S=$(curl -s $API/cluster/status)
+  [[ "$(grep -o '"status":"UP"' <<< "$S" | wc -l)" -eq 5 && "$(grep -o '"stats":{' <<< "$S" | wc -l)" -eq 5 ]] && break
   sleep 2
 done
 curl -s $API/cluster/status; echo

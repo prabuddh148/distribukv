@@ -20,7 +20,7 @@ wait_port() {
 
 log "starting Redis"
 redis-server --port 6379 --bind 127.0.0.1 --save "" --appendonly no --dir "$DATA/redis" \
-  --daemonize yes --logfile "$LOGS/redis.log"
+  --daemonize yes --pidfile "$DATA/run/redis.pid" --logfile "$LOGS/redis.log"
 wait_port 6379 redis
 
 log "starting MySQL"
